@@ -63,6 +63,13 @@ export default defineHook(({ filter, action, init, embed }, ext) => {
 		await QueueManager.getInstance(ext).shutdownAllWorkers();
 	});
 
+	action("extensions.reload", async () => {
+		ext.logger.info("Extensions reload");
+		await QueueManager.getInstance(ext).shutdownAllWorkers();
+		await QueueManager.getInstance(ext).activateAllWorkers();
+	});
+
+
 	// embed(
 	// 	"head",
 	// 	() => `<style>

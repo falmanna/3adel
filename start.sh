@@ -1,5 +1,5 @@
 
-set -e
+set -euo pipefail
 
 echo bootstrapping
 node cli.js bootstrap
