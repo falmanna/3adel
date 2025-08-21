@@ -1,0 +1,168 @@
+services:
+  directus:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: local
+    image: directus_image
+    ports:
+      - 8055:8055
+    environment:
+      - DB_CONNECTION_STRING= "postgres://3adel:3adel@database:5432/3adel"
+      - REDIS= "redis://cache:6379/4"
+      - PORT=8055
+    env_file:
+      - env.local
+    volumes:
+      - ./schema-sync:/directus/schema-sync
+      - ./uploads:/directus/uploads
+      # Use named volumes from watcher for node_modules and dist
+      - directus_extensions_node_modules:/directus/extensions/3adel/node_modules
+      - directus_extensions_dist:/directus/extensions/3adel/dist
+      # Map other extension files from local
+      - ./extensions/3adel/src:/directus/extensions/3adel/src
+      - ./extensions/3adel/package.json:/directus/extensions/3adel/package.json
+      - ./extensions/3adel/tsconfig.json:/directus/extensions/3adel/tsconfig.json
+      - ./start.sh:/directus/start.sh
+      # Share safety notice file
+      - extensions_safety_volume:/directus
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /directus/extensions_safe_notice.txt"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+    depends_on:
+      database:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+      directus_watcher:
+        condition: service_healthy
+
+  directus_watcher:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: local_extensions_auto_rebuild
+    volumes:
+      - ./extensions/3adel/src:/directus/extensions/3adel/src
+      - ./extensions/3adel/package.json:/directus/extensions/3adel/package.json
+      - ./extensions/3adel/tsconfig.json:/directus/extensions/3adel/tsconfig.json
+      # Node modules and dist are created in the container and shared with directus service
+      - directus_extensions_node_modules:/directus/extensions/3adel/node_modules
+      - directus_extensions_dist:/directus/extensions/3adel/dist
+      # Share safety notice file
+      - extensions_safety_volume:/directus
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /directus/extensions_safe_notice.txt"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+
+  directus_schema_export:
+    image: directus_image
+    command: >
+      sh -c 'node cli.js schema-sync export && node cli.js models snapshot /directus/extensions/3adel/src/models.d.ts'
+    environment:
+      - DB_CONNECTION_STRING= "postgres://3adel:3adel@database:5432/3adel"
+      - REDIS= "redis://cache:6379/4"
+      - PORT=8055
+    env_file:
+      - env.local
+    volumes:
+      - ./schema-sync:/directus/schema-sync
+      - ./uploads:/directus/uploads
+      # Use named volumes from watcher for node_modules and dist
+      - directus_extensions_node_modules:/directus/extensions/3adel/node_modules
+      - directus_extensions_dist:/directus/extensions/3adel/dist
+      # Map other extension files from local
+      - ./extensions/3adel/src:/directus/extensions/3adel/src
+      - ./extensions/3adel/package.json:/directus/extensions/3adel/package.json
+      - ./extensions/3adel/tsconfig.json:/directus/extensions/3adel/tsconfig.json
+      - ./start.sh:/directus/start.sh
+      # Share safety notice file
+      - extensions_safety_volume:/directus
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /directus/extensions_safe_notice.txt"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+    depends_on:
+      database:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+      directus_watcher:
+        condition: service_healthy
+    profiles:
+      - run_only
+
+  directus_schema_import:
+    image: directus_image
+    command: node cli.js import
+    environment:
+      - DB_CONNECTION_STRING= "postgres://3adel:3adel@database:5432/3adel"
+      - REDIS= "redis://cache:6379/4"
+      - PORT=8055
+    env_file:
+      - env.local
+    volumes:
+      - ./schema-sync:/directus/schema-sync
+      - ./uploads:/directus/uploads
+      # Use named volumes from watcher for node_modules and dist
+      - directus_extensions_node_modules:/directus/extensions/3adel/node_modules
+      - directus_extensions_dist:/directus/extensions/3adel/dist
+      # Map other extension files from local
+      - ./extensions/3adel/src:/directus/extensions/3adel/src
+      - ./extensions/3adel/package.json:/directus/extensions/3adel/package.json
+      - ./extensions/3adel/tsconfig.json:/directus/extensions/3adel/tsconfig.json
+      - ./start.sh:/directus/start.sh
+      # Share safety notice file
+      - extensions_safety_volume:/directus
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /directus/extensions_safe_notice.txt"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 5s
+    depends_on:
+      database:
+        condition: service_healthy
+      cache:
+        condition: service_healthy
+      directus_watcher:
+        condition: service_healthy
+    profiles:
+      - run_only
+
+  database:
+    image: supabase/postgres:17.4.1.074
+    environment:
+      POSTGRES_USER: "3adel"
+      POSTGRES_PASSWORD: "3adel"
+      POSTGRES_DB: "3adel"
+    healthcheck:
+      test: ["CMD", "pg_isready", "--host=localhost", "--username=directus"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_interval: 5s
+      start_period: 30s
+
+  cache:
+    image: redis:6
+    healthcheck:
+      test: ["CMD-SHELL", "[ $$(redis-cli ping) = 'PONG' ]"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_interval: 5s
+      start_period: 30s
+
+volumes:
+  directus_extensions_node_modules:
+  directus_extensions_dist:
+  extensions_safety_volume:
