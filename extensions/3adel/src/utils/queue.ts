@@ -22,10 +22,13 @@ export type QueueTransactionContext = {
 class QueueManager {
 	private static instance: QueueManager;
 	private workers: { [key: string]: Worker<any, any> } = {};
+	private queues: { [key: string]: Queue<any> } = {};
 	private logger: HookExtensionContext["logger"];
 	private env: HookExtensionContext["env"];
 	private db: HookExtensionContext["database"];
 	private emitter: DirectusEmitter;
+	private producerConnection?: Redis;
+	private workerBaseConnection?: Redis;
 
 	private constructor(ext_context: HookExtensionContext) {
 		this.logger = ext_context.logger;
@@ -42,16 +45,25 @@ class QueueManager {
 	}
 
 	public getQueue<T>(name: string, jobOptions?: DefaultJobOptions) {
+		if (this.queues[name]) {
+			return this.queues[name] as Queue<Job<T>>;
+		}
+
 		const defaultJobOptions = jobOptions ?? {
 			removeOnComplete: this.env.JOB_REMOVE_ON_COMPLETE || 100,
 			removeOnFail: this.env.JOB_REMOVE_ON_FAIL || 100,
 			attempts: this.env.JOB_ATTEMPTS || 10,
 			backoff: { type: "exponential", delay: this.env.JOB_BACKOFF_DELAY || 1000 },
 		};
-		return new Queue<Job<T>>(name, {
-			connection: new Redis(this.env.REDIS, { maxRetriesPerRequest: null }),
+
+		const queue = new Queue<Job<T>>(name, {
+			connection: this.getProducerConnection(),
 			defaultJobOptions,
 		});
+
+		this.queues[name] = queue as unknown as Queue<any>;
+		this.logger.debug(`QueueManager: created queue '${name}' (cached queues=${Object.keys(this.queues).length})`);
+		return queue;
 	}
 
 	public initializeWorker<T, R>(
@@ -82,20 +94,17 @@ class QueueManager {
 			async (job: Job<T>) => {
 				let interrupted = false;
 
-				// Define the cancellation handler
 				const cancelHandler = (meta: Record<string, any>) => {
 					if (meta.key === job.id) {
 						interrupted = true;
 					}
 				};
 
-				// Register the cancellation handler
 				this.emitter.onAction("bullmq.cancel-job", cancelHandler);
 
 				try {
 					const isInterrupted = () => interrupted;
 
-					// Start the transaction
 					const queuedEvents: ActionEventParams[] = [];
 
 					const bypassEmitAction = (params: ActionEventParams) => {
@@ -109,13 +118,11 @@ class QueueManager {
 						}),
 					);
 
-					// emit buffered events in order
 					for (const event of queuedEvents) {
 						this.emitter.emitAction(event.event, event.meta, event.context);
 					}
 					return result;
 				} finally {
-					// Clean up the event listener
 					this.emitter.offAction("bullmq.cancel-job", cancelHandler);
 				}
 			},
@@ -125,13 +132,32 @@ class QueueManager {
 		return this.setupWorker(queueName, worker);
 	}
 
+	private getProducerConnection(): Redis {
+		if (!this.producerConnection) {
+			this.producerConnection = new Redis(this.env.REDIS, {
+				maxRetriesPerRequest: null,
+			});
+		}
+		return this.producerConnection;
+	}
+
+	private getWorkerConnection(): Redis {
+		if (!this.workerBaseConnection) {
+			this.workerBaseConnection = new Redis(this.env.REDIS, {
+				maxRetriesPerRequest: null,
+			});
+		}
+		return this.workerBaseConnection;
+	}
+
 	private createWorker<T, R>(
 		queueName: string,
 		processFunction: (job: Job<T>) => Promise<R>,
 		options?: Partial<WorkerOptions>,
 	): Worker<T, R> {
 		return new Worker<T, R>(queueName, processFunction, {
-			connection: new Redis(this.env.REDIS, { maxRetriesPerRequest: null }),
+			// Use a shared base connection; BullMQ will handle the blocking connection internally
+			connection: this.getWorkerConnection(),
 			autorun: false,
 			...options,
 		});
@@ -200,6 +226,29 @@ class QueueManager {
 				return worker.close();
 			}),
 		);
+	}
+
+	public async shutdownAllQueues(): Promise<void> {
+		await Promise.all(
+			Object.values(this.queues).map((queue) => {
+				this.logger.debug(`Stopping queue ${queue.name}`);
+				return queue.close();
+			}),
+		);
+		this.queues = {};
+	}
+
+	public async shutdownConnections(): Promise<void> {
+		const tasks: Promise<unknown>[] = [];
+		if (this.producerConnection) {
+			tasks.push(this.producerConnection.quit().catch((e) => this.logger.warn(e, "Error quitting producer Redis")));
+		}
+		if (this.workerBaseConnection) {
+			tasks.push(this.workerBaseConnection.quit().catch((e) => this.logger.warn(e, "Error quitting worker Redis")));
+		}
+		await Promise.all(tasks);
+		this.producerConnection = undefined;
+		this.workerBaseConnection = undefined;
 	}
 
 	public cancelJob(jobId: string) {

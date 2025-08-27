@@ -63,12 +63,13 @@ export default defineHook(({ filter, action, init, embed }, ext) => {
 		await QueueManager.getInstance(ext).shutdownAllWorkers();
 	});
 
-	action("extensions.reload", async () => {
-		ext.logger.info("Extensions reload");
-		await QueueManager.getInstance(ext).shutdownAllWorkers();
-		await QueueManager.getInstance(ext).activateAllWorkers();
-	});
-
+	if (ext.env.EXTENSIONS_AUTO_RELOAD) {
+		// this is still not properly cleaning previous workers due to loosing references 
+		// to older instances of QueueManager, new better events to handle that
+		action("extensions.reload", async () => {
+			await QueueManager.getInstance(ext).activateAllWorkers();
+		});
+	}
 
 	// embed(
 	// 	"head",
