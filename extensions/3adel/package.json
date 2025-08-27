@@ -58,6 +58,7 @@
 		"vue": "^3.5.13"
 	},
 	"dependencies": {
+		"@directus/errors": "^2.0.3",
 		"@sentry/cli": "^2.52.0",
 		"@sentry/node": "^8.26.0",
 		"@sentry/profiling-node": "^8.55.0",

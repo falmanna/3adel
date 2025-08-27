@@ -1,9 +1,3 @@
-import type {
-	AssetsService as DAssetsService,
-	FilesService as DFilesService,
-	MailService as DMailService,
-	PermissionsService,
-} from "@directus/api/dist/services";
 
 import type { HookExtensionContext } from "@directus/extensions";
 import type { Accountability, ActionHandler, EventContext, Permission } from "@directus/types";
@@ -23,15 +17,13 @@ export async function constructRepository<C extends CollectionName>(
 		schema: await context.getSchema({ database: context.database }),
 		knex: context.database,
 		accountability: accountability,
-	});
+	}) as RepositoryService<C>;
 }
-
-export type FilesService = DFilesService;
 
 export async function constructFileService(
 	context: HookExtensionContext,
 	accountability?: Accountability,
-): Promise<FilesService> {
+){
 	return new context.services.FilesService({
 		schema: await context.getSchema({ database: context.database }),
 		knex: context.database,
@@ -39,9 +31,7 @@ export async function constructFileService(
 	});
 }
 
-export type AssetsService = DAssetsService;
-
-export async function constructAssetsService(context: HookExtensionContext): Promise<AssetsService> {
+export async function constructAssetsService(context: HookExtensionContext){
 	return new context.services.AssetsService({
 		schema: await context.getSchema({ database: context.database }),
 		knex: context.database,
@@ -61,7 +51,7 @@ export async function getUserPermissions(
 		const userRole = await roleRepo.readOne(role, { fields: ["*", "policies.*"] });
 		const policies = userRole.policies?.map((policy) => policy.policy as string) || [];
 
-		const permissionsService: PermissionsService = new context.services.PermissionsService({
+		const permissionsService = new context.services.PermissionsService({
 			schema: await context.getSchema({ database: context.database }),
 			knex: context.database,
 		});
@@ -89,12 +79,10 @@ export async function constructNotificationService(context: HookExtensionContext
 	return await constructRepository(context, "directus_notifications", accountability);
 }
 
-export type MailService = DMailService;
-
 export async function constructMailService(
 	context: HookExtensionContext,
 	accountability: any = null,
-): Promise<MailService> {
+){
 	return new context.services.MailService({
 		schema: await context.getSchema({ database: context.database }),
 		knex: context.database,

@@ -1,10 +1,11 @@
-import type { Emitter } from "@directus/api/dist/emitter";
-import type { ItemsService, QueryOptions } from "@directus/api/dist/services";
-import type { Accountability, PrimaryKey, Query } from "@directus/types";
+import type { Accountability, ActionEventParams, ActionHandler, EventContext, ExtensionsServices, FilterHandler, InitHandler, MutationOptions, PrimaryKey, Query, QueryOptions } from "@directus/types";
 import { Request } from "express";
 
-import { ActionEventParams as DActionEventParams, MutationOptions } from "@directus/api/dist/types";
 import { CollectionName, Collections, ItemIn } from "../models";
+
+export { ActionEventParams };
+
+type ItemsService<T> = ExtensionsServices["ItemsService"];
 
 type PickNullable<T> = {
 	[P in keyof T as null extends T[P] ? P : never]: T[P];
@@ -41,8 +42,24 @@ export function isArray(value: any): value is any[] {
 	return Array.isArray(value);
 }
 
-export type DirectusEmitter = Emitter;
-export type ActionEventParams = DActionEventParams;
+// copied and adapted from @directus source code
+export declare class DirectusEmitter {
+    private filterEmitter;
+    private actionEmitter;
+    private initEmitter;
+    constructor();
+    private getDefaultContext;
+    emitFilter<T>(event: string | string[], payload: T, meta: Record<string, any>, context?: EventContext | null): Promise<T>;
+    emitAction(event: string | string[], meta: Record<string, any>, context?: EventContext | null): void;
+    emitInit(event: string, meta: Record<string, any>): Promise<void>;
+    onFilter<T = unknown>(event: string, handler: FilterHandler<T>): void;
+    onAction(event: string, handler: ActionHandler): void;
+    onInit(event: string, handler: InitHandler): void;
+    offFilter<T = unknown>(event: string, handler: FilterHandler<T>): void;
+    offAction(event: string, handler: ActionHandler): void;
+    offInit(event: string, handler: InitHandler): void;
+    offAll(): void;
+}
 
 type IsExpanded<T extends string> = T extends `${infer _}.${infer _}` ? true : false;
 type BaseFieldName<T extends string> = T extends `${infer Base}.${infer _}` ? Base : T;

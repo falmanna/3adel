@@ -20,60 +20,6 @@ type ISearchOptions = Partial<
 
 // add nested fields to search
 const SearchOptions: ISearchOptions = {
-	business: {
-		string: {
-			name: true,
-			"erp_contact_id.company_name": true,
-		},
-	},
-	contact: {
-		string: {
-			first_name: true,
-			last_name: true,
-			phone: true,
-			email: true,
-			"businesses.business_id.name": true,
-		},
-	},
-	order: {
-		string: {
-			"business_id.name": true,
-			"business_id.erp_contact_id.company_name": true,
-		},
-	},
-	pricelist: {
-		string: {
-			name: true,
-			"businesses.name": true,
-			"businesses.erp_contact_id.company_name": true,
-		},
-	},
-	pricelist_product: {
-		string: {
-			"product_id.sku": true,
-			"product_id.name": true,
-			"pricelist_id.name": true,
-			"pricelist_id.businesses.name": true,
-		},
-	},
-	product: {
-		string: {
-			sku: true,
-			name: true,
-			"pricelists.pricelist_id.name": true,
-			"pricelists.pricelist_id.businesses.name": true,
-		},
-	},
-	conversation: {
-		string: {
-			status: true,
-			"contact_id.first_name": true,
-			"contact_id.last_name": true,
-			"contact_id.phone": true,
-			"contact_id.email": true,
-			"contact_id.businesses.business_id.name": true,
-		},
-	},
 };
 
 const relationFields = new Set(["uuid", "m2o", "user-created", "user-updated"]);
